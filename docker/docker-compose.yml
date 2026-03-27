@@ -1,0 +1,23 @@
+version: "3.8"
+
+services:
+  pipeline-ops:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8100:8100"
+    volumes:
+      - ../data:/app/data
+    environment:
+      - S4OPS_POLL_INTERVAL=5
+      - S4OPS_ALERT_BACKENDS=["log","slack"]
+      - S4OPS_SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped

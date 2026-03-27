@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S4 Pipeline Ops</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --text-dim: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --yellow: #d29922; --red: #f85149; --blue: #58a6ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+         background: var(--bg); color: var(--text); padding: 16px; }
+  h1 { font-size: 20px; margin-bottom: 16px; }
+  h1 span { color: var(--text-dim); font-weight: 400; font-size: 14px; margin-left: 12px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .card h2 { font-size: 14px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px;
+             margin-bottom: 12px; }
+  .stat { font-size: 28px; font-weight: 600; }
+  .stat-label { font-size: 12px; color: var(--text-dim); }
+  .stat-row { display: flex; gap: 24px; flex-wrap: wrap; }
+  .stat-item { min-width: 80px; }
+  .chart-container { position: relative; height: 200px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--text-dim); font-weight: 500; padding: 6px 8px;
+       border-bottom: 1px solid var(--border); }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .badge-green { background: rgba(63,185,80,0.2); color: var(--green); }
+  .badge-yellow { background: rgba(210,153,34,0.2); color: var(--yellow); }
+  .badge-red { background: rgba(248,81,73,0.2); color: var(--red); }
+  .badge-blue { background: rgba(88,166,255,0.2); color: var(--blue); }
+  .badge-dim { background: rgba(139,148,158,0.2); color: var(--text-dim); }
+  .alert-item { padding: 8px; border-left: 3px solid; margin-bottom: 4px; font-size: 13px; }
+  .alert-warning { border-color: var(--yellow); background: rgba(210,153,34,0.08); }
+  .alert-critical { border-color: var(--red); background: rgba(248,81,73,0.08); }
+  .alert-info { border-color: var(--blue); background: rgba(88,166,255,0.08); }
+  .alert-time { color: var(--text-dim); font-size: 11px; }
+  .empty { color: var(--text-dim); font-style: italic; padding: 16px 0; text-align: center; }
+  .gpu-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .gpu-bar-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+  .progress-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; width: 80px; display: inline-block; vertical-align: middle; }
+  .progress-fill { height: 100%; background: var(--blue); border-radius: 2px; }
+  @media (max-width: 800px) { .grid, .grid-3 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<h1>S4 Pipeline Ops <span id="clock"></span></h1>
+
+<!-- System overview cards -->
+<div class="grid-3" id="gpu-cards"></div>
+
+<!-- Charts -->
+<div class="grid">
+  <div class="card">
+    <h2>GPU Utilization</h2>
+    <div class="chart-container"><canvas id="utilChart"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>GPU Temperature</h2>
+    <div class="chart-container"><canvas id="tempChart"></canvas></div>
+  </div>
+</div>
+<div class="grid">
+  <div class="card">
+    <h2>VRAM Usage</h2>
+    <div class="chart-container"><canvas id="vramChart"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>System Resources</h2>
+    <div class="chart-container"><canvas id="sysChart"></canvas></div>
+  </div>
+</div>
+
+<!-- Jobs & Alerts -->
+<div class="grid">
+  <div class="card">
+    <h2>Job Queue</h2>
+    <div id="job-table"></div>
+  </div>
+  <div class="card">
+    <h2>Recent Alerts</h2>
+    <div id="alert-list"></div>
+  </div>
+</div>
+
+<!-- Pipeline Health -->
+<div class="card" style="margin-bottom:16px">
+  <h2>Pipeline Health</h2>
+  <div id="pipeline-health"></div>
+</div>
+
+<script>
+const POLL_MS = 5000;
+const COLORS = ['#58a6ff','#f0883e','#a371f7','#3fb950','#f85149','#d29922','#79c0ff','#db61a2'];
+
+// Chart setup
+const chartOpts = (yLabel, max) => ({
+  responsive: true, maintainAspectRatio: false,
+  animation: { duration: 300 },
+  scales: {
+    x: { display: true, grid: { color: '#21262d' }, ticks: { color: '#8b949e', maxTicksLimit: 8, font: { size: 10 } } },
+    y: { min: 0, max, grid: { color: '#21262d' }, ticks: { color: '#8b949e', font: { size: 10 } },
+         title: { display: true, text: yLabel, color: '#8b949e', font: { size: 11 } } }
+  },
+  plugins: { legend: { labels: { color: '#e6edf3', boxWidth: 12, font: { size: 11 } } } },
+  elements: { point: { radius: 0 }, line: { tension: 0.3, borderWidth: 2 } }
+});
+
+const utilChart = new Chart(document.getElementById('utilChart'), { type: 'line', data: { labels: [], datasets: [] }, options: chartOpts('%', 100) });
+const tempChart = new Chart(document.getElementById('tempChart'), { type: 'line', data: { labels: [], datasets: [] }, options: chartOpts('°C', 100) });
+const vramChart = new Chart(document.getElementById('vramChart'), { type: 'line', data: { labels: [], datasets: [] }, options: chartOpts('MB', null) });
+const sysChart  = new Chart(document.getElementById('sysChart'),  { type: 'line', data: { labels: [], datasets: [] }, options: chartOpts('%', 100) });
+
+function fmtTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function barColor(pct) {
+  if (pct > 90) return 'var(--red)';
+  if (pct > 70) return 'var(--yellow)';
+  return 'var(--green)';
+}
+
+function statusBadge(status) {
+  const map = { pending: 'dim', queued: 'yellow', running: 'blue', completed: 'green', failed: 'red', cancelled: 'dim', retrying: 'yellow' };
+  return `<span class="badge badge-${map[status] || 'dim'}">${status}</span>`;
+}
+
+function severityClass(s) { return { warning: 'alert-warning', critical: 'alert-critical', info: 'alert-info' }[s] || 'alert-info'; }
+
+// ── Update GPU cards ──
+function updateGPUCards(gpus) {
+  const el = document.getElementById('gpu-cards');
+  if (!gpus || gpus.length === 0) { el.innerHTML = '<div class="card empty">No GPUs detected</div>'; return; }
+  el.innerHTML = gpus.map(g => {
+    const vramPct = g.memory_total_mb > 0 ? (g.memory_used_mb / g.memory_total_mb * 100) : 0;
+    return `<div class="card">
+      <h2>GPU ${g.gpu_index}: ${g.name}</h2>
+      <div class="stat-row">
+        <div class="stat-item"><div class="stat" style="color:${barColor(g.temperature_c)}">${g.temperature_c.toFixed(0)}°C</div><div class="stat-label">Temperature</div></div>
+        <div class="stat-item"><div class="stat">${g.utilization_pct.toFixed(0)}%</div><div class="stat-label">Utilization</div></div>
+        <div class="stat-item"><div class="stat">${(g.memory_used_mb/1024).toFixed(1)}G</div><div class="stat-label">VRAM (${vramPct.toFixed(0)}%)</div></div>
+        <div class="stat-item"><div class="stat">${g.power_draw_w.toFixed(0)}W</div><div class="stat-label">Power</div></div>
+      </div>
+      <div style="margin-top:8px">
+        <div class="gpu-bar"><div class="gpu-bar-fill" style="width:${g.utilization_pct}%;background:${barColor(g.utilization_pct)}"></div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Update charts from history ──
+function updateCharts(history) {
+  if (!history || history.length === 0) return;
+  const labels = history.map(e => fmtTime(e.timestamp));
+
+  // Find all GPU indices
+  const gpuIndices = [...new Set(history.flatMap(e => (e.gpus || []).map(g => g.gpu_index)))].sort();
+
+  // Util chart
+  utilChart.data.labels = labels;
+  utilChart.data.datasets = gpuIndices.map((idx, i) => ({
+    label: `GPU ${idx}`, borderColor: COLORS[i % COLORS.length], backgroundColor: 'transparent',
+    data: history.map(e => { const g = (e.gpus||[]).find(x => x.gpu_index === idx); return g ? g.utilization_pct : null; })
+  }));
+  utilChart.update('none');
+
+  // Temp chart
+  tempChart.data.labels = labels;
+  tempChart.data.datasets = gpuIndices.map((idx, i) => ({
+    label: `GPU ${idx}`, borderColor: COLORS[i % COLORS.length], backgroundColor: 'transparent',
+    data: history.map(e => { const g = (e.gpus||[]).find(x => x.gpu_index === idx); return g ? g.temperature_c : null; })
+  }));
+  tempChart.update('none');
+
+  // VRAM chart
+  vramChart.data.labels = labels;
+  vramChart.data.datasets = gpuIndices.map((idx, i) => ({
+    label: `GPU ${idx}`, borderColor: COLORS[i % COLORS.length], backgroundColor: 'transparent',
+    data: history.map(e => { const g = (e.gpus||[]).find(x => x.gpu_index === idx); return g ? g.memory_used_mb : null; })
+  }));
+  vramChart.update('none');
+
+  // System chart (CPU + RAM)
+  sysChart.data.labels = labels;
+  sysChart.data.datasets = [
+    { label: 'CPU %', borderColor: '#58a6ff', backgroundColor: 'transparent', data: history.map(e => e.cpu_pct) },
+    { label: 'RAM %', borderColor: '#a371f7', backgroundColor: 'transparent',
+      data: history.map(e => e.ram_total_gb > 0 ? (e.ram_used_gb / e.ram_total_gb * 100) : 0) },
+  ];
+  sysChart.update('none');
+}
+
+// ── Update jobs table ──
+function updateJobs(data) {
+  const el = document.getElementById('job-table');
+  const jobs = data.jobs || [];
+  if (jobs.length === 0) { el.innerHTML = '<div class="empty">No jobs</div>'; return; }
+  let html = '<table><tr><th>ID</th><th>Name</th><th>Status</th><th>GPUs</th><th>Progress</th></tr>';
+  for (const j of jobs.slice(0, 15)) {
+    const gpus = (j.assigned_gpus || []).join(',') || '—';
+    const prog = j.progress_pct != null
+      ? `<div class="progress-bar"><div class="progress-fill" style="width:${j.progress_pct}%"></div></div> ${j.progress_pct.toFixed(0)}%`
+      : '—';
+    html += `<tr><td style="font-family:monospace">${j.id}</td><td>${(j.name||'').substring(0,30)}</td><td>${statusBadge(j.status)}</td><td>${gpus}</td><td>${prog}</td></tr>`;
+  }
+  html += '</table>';
+  const stats = data.stats || {};
+  html += `<div style="margin-top:8px;font-size:12px;color:var(--text-dim)">Running: ${stats.running||0} | Queued: ${stats.queued||0} | Total: ${stats.total||0}</div>`;
+  el.innerHTML = html;
+}
+
+// ── Update alerts ──
+function updateAlerts(alerts) {
+  const el = document.getElementById('alert-list');
+  if (!alerts || alerts.length === 0) { el.innerHTML = '<div class="empty">No alerts</div>'; return; }
+  el.innerHTML = alerts.slice(0, 10).map(a =>
+    `<div class="alert-item ${severityClass(a.severity)}">
+      <strong>${a.title}</strong><br>
+      <span style="font-size:12px">${a.message}</span>
+      <div class="alert-time">${fmtTime(a.timestamp)}</div>
+    </div>`
+  ).join('');
+}
+
+// ── Update pipeline health ──
+function updateHealth(data) {
+  const el = document.getElementById('pipeline-health');
+  const stages = data.stages || [];
+  if (stages.length === 0) { el.innerHTML = '<div class="empty">No stages</div>'; return; }
+  const statusColor = { healthy: 'green', degraded: 'yellow', down: 'red', unknown: 'dim' };
+  let html = `<div style="margin-bottom:8px">Overall: <span class="badge badge-${statusColor[data.overall_status]||'dim'}">${(data.overall_status||'unknown').toUpperCase()}</span>
+    <span style="margin-left:16px;font-size:12px;color:var(--text-dim)">24h: ${data.total_jobs_24h||0} jobs, ${data.failed_jobs_24h||0} failed</span></div>`;
+  html += '<table><tr><th>Stage</th><th>Status</th><th>Error Rate</th><th>Avg Duration</th><th>Throughput/hr</th></tr>';
+  for (const s of stages) {
+    html += `<tr><td>${s.name}</td><td><span class="badge badge-${statusColor[s.status]||'dim'}">${s.status}</span></td>
+      <td>${s.error_rate_pct.toFixed(1)}%</td><td>${s.avg_duration_seconds.toFixed(0)}s</td><td>${s.throughput_per_hour.toFixed(1)}</td></tr>`;
+  }
+  html += '</table>';
+  el.innerHTML = html;
+}
+
+// ── Poll loop ──
+async function poll() {
+  try {
+    const [metricsRes, historyRes, jobsRes, alertsRes, healthRes] = await Promise.all([
+      fetch('/gpu/metrics'), fetch('/gpu/history?hours=1'), fetch('/jobs'),
+      fetch('/alerts?limit=10'), fetch('/health')
+    ]);
+    const metrics = await metricsRes.json();
+    const history = await historyRes.json();
+    const jobs = await jobsRes.json();
+    const alerts = await alertsRes.json();
+    const health = await healthRes.json();
+
+    updateGPUCards(metrics.metrics?.gpus || []);
+    updateCharts(history.history || []);
+    updateJobs(jobs);
+    updateAlerts(alerts.alerts || []);
+    updateHealth(health);
+  } catch (e) { console.error('Poll failed:', e); }
+
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString();
+}
+
+poll();
+setInterval(poll, POLL_MS);
+setInterval(() => { document.getElementById('clock').textContent = new Date().toLocaleTimeString(); }, 1000);
+</script>
+</body>
+</html>
