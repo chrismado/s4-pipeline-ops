@@ -9,7 +9,7 @@ Computes:
 """
 
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Optional
 
 from src.models.schemas import Job, JobStatus
@@ -28,7 +28,7 @@ class JobAnalytics:
 
     def summary(self, hours: int = 168) -> dict:
         """Full analytics summary for the given time window."""
-        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        cutoff = datetime.now(UTC) - timedelta(hours=hours)
         recent = [j for j in self._jobs.values() if j.created_at > cutoff]
 
         return {
@@ -78,7 +78,7 @@ class JobAnalytics:
             if "timed out" in reason.lower():
                 reasons["Timeout"] += 1
             elif "exit code" in reason.lower():
-                reasons[f"Exit code failure"] += 1
+                reasons["Exit code failure"] += 1
             elif "unclean shutdown" in reason.lower():
                 reasons["Unclean shutdown"] += 1
             else:
@@ -114,7 +114,7 @@ class JobAnalytics:
     def throughput_by_hour(self, jobs: Optional[list[Job]] = None, hours: int = 24) -> list[dict]:
         """Job completions per hour over the given window."""
         jobs = jobs if jobs is not None else list(self._jobs.values())
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         buckets: list[dict] = []
 
         for h in range(hours, 0, -1):

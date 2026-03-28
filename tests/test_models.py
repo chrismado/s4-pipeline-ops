@@ -1,19 +1,13 @@
 """Tests for data models — validation, properties, edge cases."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from src.models.schemas import (
-    Alert,
-    AlertSeverity,
-    AlertType,
     GPUMetrics,
     Job,
     JobConfig,
-    JobPriority,
     JobStatus,
     PipelineHealth,
-    PipelineStage,
-    StageStatus,
     SystemMetrics,
 )
 
@@ -114,7 +108,7 @@ class TestJob:
             name="Test Job",
             config=JobConfig(command="echo hello"),
             status=JobStatus.RUNNING,
-            started_at=datetime.utcnow() - timedelta(seconds=120),
+            started_at=datetime.now(UTC) - timedelta(seconds=120),
         )
         assert job.duration_seconds is not None
         assert job.duration_seconds >= 119  # Allow small timing margin

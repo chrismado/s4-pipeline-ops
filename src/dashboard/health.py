@@ -5,10 +5,9 @@ Each pipeline stage (ingest, preprocess, train, render, export) is monitored
 independently. The overall pipeline status is the worst of any individual stage.
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Optional
 
-from loguru import logger
 
 from config.settings import settings
 from src.models.schemas import (
@@ -46,7 +45,7 @@ class HealthMonitor:
             return
 
         stage = self.stages[stage_name]
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         self._job_history.append({
             "stage": stage_name,
@@ -79,7 +78,7 @@ class HealthMonitor:
             overall = StageStatus.UNKNOWN
 
         # 24h stats
-        cutoff = datetime.utcnow() - timedelta(hours=24)
+        cutoff = datetime.now(UTC) - timedelta(hours=24)
         recent = [h for h in self._job_history if h["timestamp"] > cutoff]
         total_24h = len(recent)
         failed_24h = sum(1 for h in recent if h["status"] == "failed")
@@ -108,7 +107,7 @@ class HealthMonitor:
     def _recalculate_stage(self, stage_name: str):
         """Recalculate metrics for a stage from job history."""
         stage = self.stages[stage_name]
-        cutoff = datetime.utcnow() - timedelta(hours=24)
+        cutoff = datetime.now(UTC) - timedelta(hours=24)
         recent = [
             h for h in self._job_history
             if h["stage"] == stage_name and h["timestamp"] > cutoff

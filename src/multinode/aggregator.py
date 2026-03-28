@@ -11,13 +11,12 @@ Usage:
 Nodes can also self-register via POST /nodes/register.
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Optional
 
 import httpx
 from loguru import logger
 
-from src.models.schemas import GPUMetrics, SystemMetrics
 
 
 class NodeInfo:
@@ -35,7 +34,7 @@ class NodeInfo:
     def is_stale(self) -> bool:
         if self.last_seen is None:
             return True
-        return (datetime.utcnow() - self.last_seen) > timedelta(minutes=2)
+        return (datetime.now(UTC) - self.last_seen) > timedelta(minutes=2)
 
 
 class NodeAggregator:
@@ -104,7 +103,7 @@ class NodeAggregator:
             "cluster_gpus": all_gpus,
             "healthy_nodes": healthy,
             "total_nodes": len(self.nodes),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     def get_node_status(self) -> list[dict]:
@@ -127,7 +126,7 @@ class NodeAggregator:
             resp = httpx.get(f"{node.url}/agent/metrics", timeout=timeout)
             resp.raise_for_status()
             data = resp.json()
-            node.last_seen = datetime.utcnow()
+            node.last_seen = datetime.now(UTC)
             node.last_metrics = data
             node.healthy = True
             node.node_id = data.get("node_id", node.url)

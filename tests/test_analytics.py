@@ -1,6 +1,6 @@
 """Tests for historical job analytics."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from src.dashboard.analytics import JobAnalytics
 from src.models.schemas import Job, JobConfig, JobStatus, JobPriority
@@ -15,7 +15,7 @@ def _make_job(
     error_message=None,
     gpu_ids=None,
 ):
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     return Job(
         id=name[:8],
         name=name,

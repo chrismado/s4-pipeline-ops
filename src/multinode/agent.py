@@ -13,10 +13,9 @@ The central aggregator polls each agent's /agent/metrics endpoint.
 """
 
 import socket
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter
-from loguru import logger
 
 from src.collectors.gpu import collect_gpu_metrics, collect_system_metrics
 
@@ -35,7 +34,7 @@ def agent_metrics():
     return {
         "node_id": get_node_id(),
         "hostname": socket.gethostname(),
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "gpu_count": metrics.gpu_count,
         "metrics": metrics.model_dump(mode="json"),
     }
@@ -49,5 +48,5 @@ def agent_health():
         "node_id": get_node_id(),
         "status": "ok",
         "gpu_count": len(gpus),
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }

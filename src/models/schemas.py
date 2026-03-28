@@ -4,7 +4,7 @@ Data models for pipeline ops — GPU metrics, jobs, alerts, pipeline health.
 Pydantic models provide validation, serialization, and clean API contracts.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Optional
 
@@ -31,7 +31,7 @@ class GPUMetrics(BaseModel):
     clock_mem_mhz: int = 0
     pcie_tx_kbps: int = 0
     pcie_rx_kbps: int = 0
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def vram_fraction(self) -> float:
@@ -51,7 +51,7 @@ class SystemMetrics(BaseModel):
     ram_total_gb: float = 0.0
     disk_used_gb: float = 0.0
     disk_total_gb: float = 0.0
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def gpu_count(self) -> int:
@@ -105,7 +105,7 @@ class Job(BaseModel):
     config: JobConfig
     status: JobStatus = JobStatus.PENDING
     priority: JobPriority = JobPriority.NORMAL
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     assigned_gpus: list[int] = Field(default=[])
@@ -119,7 +119,7 @@ class Job(BaseModel):
     @property
     def duration_seconds(self) -> Optional[float]:
         if self.started_at:
-            end = self.completed_at or datetime.utcnow()
+            end = self.completed_at or datetime.now(UTC)
             return (end - self.started_at).total_seconds()
         return None
 
@@ -162,7 +162,7 @@ class Alert(BaseModel):
     job_id: Optional[str] = None
     metric_value: Optional[float] = None
     threshold: Optional[float] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     acknowledged: bool = False
 
 
@@ -196,7 +196,7 @@ class PipelineHealth(BaseModel):
     total_jobs_24h: int = 0
     failed_jobs_24h: int = 0
     avg_queue_wait_seconds: float = 0.0
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def failure_rate_24h(self) -> float:

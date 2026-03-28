@@ -10,8 +10,9 @@ import json
 import os
 import subprocess
 import sys
+import select
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional
 
@@ -138,7 +139,7 @@ class JobManager:
                     proc.kill()
                     job.status = JobStatus.FAILED
                     job.error_message = "Timed out"
-                    job.completed_at = datetime.utcnow()
+                    job.completed_at = datetime.now(UTC)
                     job.exit_code = -9
                     del self._processes[job_id]
                     changed.append(job)
@@ -146,7 +147,7 @@ class JobManager:
 
             # Process finished
             job.exit_code = retcode
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(UTC)
 
             if retcode == 0:
                 job.status = JobStatus.COMPLETED
@@ -183,7 +184,7 @@ class JobManager:
             del self._processes[job_id]
 
         job.status = JobStatus.CANCELLED
-        job.completed_at = datetime.utcnow()
+        job.completed_at = datetime.now(UTC)
         self._save_state()
         logger.info(f"Job {job_id} cancelled")
         return job
@@ -237,11 +238,11 @@ class JobManager:
             )
             self._processes[job.id] = proc
             job.status = JobStatus.RUNNING
-            job.started_at = datetime.utcnow()
+            job.started_at = datetime.now(UTC)
         except Exception as e:
             job.status = JobStatus.FAILED
             job.error_message = str(e)
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(UTC)
             logger.error(f"Failed to start job {job.id}: {e}")
 
     def _read_output(self, job: Job, proc: subprocess.Popen) -> None:
@@ -304,7 +305,7 @@ class JobManager:
                 if job.status == JobStatus.RUNNING:
                     job.status = JobStatus.FAILED
                     job.error_message = "Process died (unclean shutdown)"
-                    job.completed_at = datetime.utcnow()
+                    job.completed_at = datetime.now(UTC)
                 self.jobs[jid] = job
             logger.info(f"Loaded {len(self.jobs)} jobs from state file")
         except Exception as e:

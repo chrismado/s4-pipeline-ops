@@ -7,7 +7,7 @@ Alert cooldown prevents spamming repeated alerts for the same condition.
 """
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Optional
 
 import httpx
@@ -174,7 +174,7 @@ class AlertEngine:
         """Create an alert if not in cooldown."""
         cooldown_key = f"{alert_type.value}:{gpu_index if gpu_index is not None else 'system'}"
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         last_fired = self._cooldowns.get(cooldown_key)
         if last_fired and (now - last_fired).total_seconds() < settings.alert_cooldown_seconds:
             return None

@@ -7,12 +7,11 @@ when no NVIDIA GPU is available (for development/testing).
 """
 
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 
 import psutil
 from loguru import logger
 
-from config.settings import settings
 from src.models.schemas import GPUMetrics, SystemMetrics
 
 # Try to import pynvml — gracefully degrade if no GPU
@@ -51,7 +50,7 @@ def collect_system_metrics() -> SystemMetrics:
         ram_total_gb=mem.total / (1024 ** 3),
         disk_used_gb=disk.used / (1024 ** 3),
         disk_total_gb=disk.total / (1024 ** 3),
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
     )
 
 

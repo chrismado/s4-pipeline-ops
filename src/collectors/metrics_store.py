@@ -7,7 +7,7 @@ time-series charts in the dashboard.
 """
 
 import json
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Lock
 
@@ -34,7 +34,7 @@ class MetricsStore:
     def record(self, system_metrics) -> None:
         """Append a system metrics snapshot to history."""
         entry = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "gpus": [
                 {
                     "gpu_index": g.gpu_index,
@@ -63,7 +63,7 @@ class MetricsStore:
 
     def get_history(self, hours: float = 24, gpu_index: int | None = None) -> list[dict]:
         """Return metric history for the given time window."""
-        cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
+        cutoff = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
 
         with self._lock:
             results = [e for e in self._history if e["timestamp"] >= cutoff]
@@ -80,7 +80,7 @@ class MetricsStore:
 
     def _prune(self) -> None:
         """Remove entries older than retention period."""
-        cutoff = (datetime.utcnow() - timedelta(hours=settings.metrics_retention_hours)).isoformat()
+        cutoff = (datetime.now(UTC) - timedelta(hours=settings.metrics_retention_hours)).isoformat()
         before = len(self._history)
         self._history = [e for e in self._history if e["timestamp"] >= cutoff]
         pruned = before - len(self._history)
