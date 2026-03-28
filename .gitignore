@@ -14,3 +14,7 @@ data/metrics.json
 .pytest_cache/
 .ruff_cache/
 *.log
+models/*.gguf
+benchmarks/results/*.json
+benchmarks/results/*.csv
+benchmarks/reports/*.png

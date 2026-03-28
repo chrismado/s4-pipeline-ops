@@ -11,6 +11,7 @@ Usage:
     s4ops alerts                         — Recent alerts
     s4ops serve                          — Start dashboard API
     s4ops monitor                        — Live monitoring loop
+    s4ops benchmark --all                — Run all inference benchmarks
 """
 
 import sys
@@ -305,6 +306,96 @@ def agent(
     console.print(f"[green]Starting agent on {host}:{port}[/green] (node: {node_name})")
     console.print(f"[dim]Register this node: POST /nodes/register?url=http://{node_name}:{port}[/dim]")
     uvicorn.run(api, host=host, port=port)
+
+
+@app.command()
+def benchmark(
+    all_configs: bool = typer.Option(False, "--all", help="Run all benchmark configurations"),
+    backend: Optional[str] = typer.Option(None, "--backend", "-b", help="Backend: ollama, llamacpp, vllm"),
+    config_name: Optional[str] = typer.Option(None, "--config", "-c", help="Specific config name"),
+    report: bool = typer.Option(False, "--report", help="Generate markdown report after benchmarks"),
+    quick: bool = typer.Option(False, "--quick", help="Quick mode: fewer runs (10 instead of 50)"),
+    export: Optional[str] = typer.Option(None, "--export", help="Export format: csv"),
+    output_dir: str = typer.Option("benchmarks/results", "--output", "-o", help="Results output directory"),
+):
+    """Run KV cache quantization benchmarks on inference backends."""
+    from src.benchmarks.configs import (
+        BENCHMARK_SUITE,
+        BenchmarkParams,
+        LLAMACPP_CONFIGS,
+        OLLAMA_CONFIGS,
+        VLLM_CONFIGS,
+    )
+    from src.benchmarks.runner import BenchmarkRunner
+
+    # Select configs
+    if config_name:
+        configs = [c for c in BENCHMARK_SUITE if c.name == config_name]
+        if not configs:
+            console.print(f"[red]Config not found: {config_name}[/red]")
+            console.print("Available configs:")
+            for c in BENCHMARK_SUITE:
+                console.print(f"  {c.name} — {c.description}")
+            raise typer.Exit(1)
+    elif backend:
+        backend_map = {"ollama": OLLAMA_CONFIGS, "llamacpp": LLAMACPP_CONFIGS, "vllm": VLLM_CONFIGS}
+        configs = backend_map.get(backend, [])
+        if not configs:
+            console.print(f"[red]Unknown backend: {backend}[/red]")
+            raise typer.Exit(1)
+    elif all_configs:
+        configs = BENCHMARK_SUITE
+    else:
+        console.print("[yellow]Specify --all, --backend, or --config[/yellow]")
+        console.print("\nAvailable configurations:")
+        for c in BENCHMARK_SUITE:
+            console.print(f"  [cyan]{c.name}[/cyan] — {c.description}")
+        raise typer.Exit(0)
+
+    params = BenchmarkParams(eval_runs=10 if quick else 50, warmup_runs=2 if quick else 5)
+    console.print(f"\n[bold]Running {len(configs)} benchmark(s)[/bold] ({params.eval_runs} runs each)\n")
+
+    runner = BenchmarkRunner(configs=configs, params=params, output_dir=output_dir)
+    results = runner.run_all()
+
+    if not results:
+        console.print("[red]No benchmarks completed successfully.[/red]")
+        raise typer.Exit(1)
+
+    # Display summary table
+    table = Table(title="Benchmark Results")
+    table.add_column("Config", style="cyan")
+    table.add_column("TPS", justify="right")
+    table.add_column("TTFT (ms)", justify="right")
+    table.add_column("VRAM Peak (MB)", justify="right")
+    table.add_column("KV Cache (MB)", justify="right")
+
+    for r in results:
+        table.add_row(
+            r.config.name,
+            f"{r.latency.tps_mean:.1f}",
+            f"{r.latency.ttft_ms_p50:.0f}",
+            f"{r.memory.vram_peak_mb:,.0f}",
+            f"{r.memory.vram_kv_cache_estimated_mb:,.0f}",
+        )
+
+    console.print(table)
+
+    if export == "csv":
+        from src.benchmarks.report.csv_export import export_csv
+
+        csv_path = export_csv(results)
+        console.print(f"\n[green]CSV exported:[/green] {csv_path}")
+
+    if report:
+        from src.benchmarks.report.markdown import generate_markdown_report
+        from src.benchmarks.report.plots import generate_all_plots
+
+        md_path = generate_markdown_report(results)
+        console.print(f"[green]Report generated:[/green] {md_path}")
+        plot_paths = generate_all_plots(results)
+        for p in plot_paths:
+            console.print(f"[green]Chart:[/green] {p}")
 
 
 if __name__ == "__main__":

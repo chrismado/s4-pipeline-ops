@@ -110,5 +110,11 @@ def generate_prometheus_metrics() -> str:
     for status_name, count in stats.get("by_status", {}).items():
         lines.append(f's4ops_jobs_by_status{{status="{status_name}"}} {count}')
 
+    # Inference benchmark metrics (if available)
+    from src.benchmarks.prometheus import generate_benchmark_metrics
+    bench_metrics = generate_benchmark_metrics()
+    if bench_metrics:
+        lines.append(bench_metrics)
+
     lines.append("")
     return "\n".join(lines)
