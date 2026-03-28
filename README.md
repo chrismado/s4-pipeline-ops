@@ -70,6 +70,9 @@ s4ops alerts                          Recent alerts
 s4ops serve                           Start dashboard API (port 8100)
 s4ops monitor                         Live GPU monitoring loop
 s4ops agent --port 8101               Start multi-node agent
+s4ops benchmark --all                 Run all inference benchmarks
+s4ops benchmark --backend llamacpp    Benchmark specific backend
+s4ops benchmark --all --report        Generate report with charts
 ```
 
 ## API Endpoints
@@ -227,6 +230,14 @@ s4-pipeline-ops/
 │   │   ├── app.py                  FastAPI factory
 │   │   ├── routes.py               REST endpoints
 │   │   └── prometheus.py           Prometheus exporter
+│   ├── benchmarks/
+│   │   ├── configs.py                 Benchmark configurations
+│   │   ├── runner.py                  Benchmark orchestrator
+│   │   ├── prometheus.py              Prometheus metrics for benchmarks
+│   │   ├── inference/                 Backend wrappers (Ollama, llama.cpp, vLLM)
+│   │   ├── metrics/                   Latency, memory, throughput, quality
+│   │   ├── report/                    Markdown, CSV, matplotlib charts
+│   │   └── prompts/                   Standardized eval prompts
 │   ├── multinode/
 │   │   ├── agent.py                Per-node agent
 │   │   └── aggregator.py           Central metrics aggregator
@@ -240,6 +251,49 @@ s4-pipeline-ops/
 ├── .github/workflows/ci.yml        CI pipeline
 └── pyproject.toml
 ```
+
+## KV Cache Quantization Benchmarks (March 2026)
+
+Inspired by [Google Research's TurboQuant](https://research.google/blog/turboquant) (March 25, 2026),
+which demonstrated 6× KV cache memory reduction and 8× attention speedup with no measurable accuracy
+loss on H100 GPUs. This module benchmarks the real-world impact of KV cache quantization on Mistral 7B
+inference performance using RTX 4090 consumer hardware.
+
+### What Gets Benchmarked
+
+- **Ollama**: Q4_K_M, Q5_K_M, Q8_0, FP16 model variants
+- **llama.cpp**: 6 configs — 2 model quants (Q8_0, Q4_K_M) × 3 KV cache types (FP16, INT8, INT4)
+- **vLLM** (optional): FP16 and INT8 KV cache with PagedAttention
+
+### Metrics Collected
+
+| Category | Measurements |
+|----------|-------------|
+| **Latency** | TTFT, tokens/sec, e2e latency, p50/p95/p99 across 50+ runs |
+| **Memory** | VRAM baseline, peak, estimated KV cache size via pynvml |
+| **Throughput** | Sequential RPM, concurrent throughput at 1/2/4/8 parallel requests |
+| **Quality** | Output similarity to FP16 baseline, perplexity estimation |
+
+### Run Benchmarks
+
+```bash
+# Run all benchmarks
+s4ops benchmark --all
+
+# Run specific backend
+s4ops benchmark --backend llamacpp
+
+# Quick mode (10 runs instead of 50)
+s4ops benchmark --all --quick
+
+# Generate report with charts
+s4ops benchmark --all --report
+
+# Export raw CSV
+s4ops benchmark --all --export csv
+```
+
+[Full benchmark report →](docs/kv_cache_benchmarks.md)
 
 ## Background
 

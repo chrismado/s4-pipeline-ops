@@ -1,0 +1,31 @@
+{
+  "short_generation": [
+    "Explain quantum entanglement in one paragraph.",
+    "What are the three laws of thermodynamics?",
+    "Describe the process of photosynthesis.",
+    "What is the difference between TCP and UDP?",
+    "Explain how a hash table works."
+  ],
+  "medium_generation": [
+    "Write a 200-word essay on the impact of artificial intelligence on healthcare.",
+    "Explain the differences between supervised, unsupervised, and reinforcement learning.",
+    "Describe the architecture of a transformer neural network.",
+    "Compare and contrast REST and GraphQL API design approaches.",
+    "Explain how garbage collection works in modern programming languages."
+  ],
+  "long_generation": [
+    "Write a comprehensive guide to training a neural network from scratch, including data preparation, model architecture selection, hyperparameter tuning, and evaluation.",
+    "Explain the history and evolution of programming languages from assembly to modern high-level languages."
+  ],
+  "s4_domain": [
+    "What did Bob Lazar claim about Element 115 and its role in propulsion?",
+    "Describe the layout of the S4 facility as described by Lazar.",
+    "What evidence exists for or against Lazar's employment at Los Alamos?"
+  ],
+  "perplexity_eval": [
+    "The quick brown fox jumps over the lazy dog. The five boxing wizards jump quickly.",
+    "In 1988, Robert Scott Lazar claimed to have worked on reverse engineering extraterrestrial technology at a site called S4 near the Nevada Test Site.",
+    "Machine learning is a subset of artificial intelligence that focuses on building systems that learn from data to improve their performance on specific tasks without being explicitly programmed.",
+    "The transformer architecture revolutionized natural language processing by introducing self-attention mechanisms that allow models to process sequences in parallel rather than sequentially."
+  ]
+}
